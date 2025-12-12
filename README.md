@@ -1,6 +1,6 @@
 # Organization Management Service
 
-A backend service for managing organizations in a multi-tenant architecture. Built with FastAPI and MongoDB, this service allows creating organizations, managing admins, and handling authentication using JWT tokens.
+A backend service for managing organizations. Built with FastAPI and MongoDB, this service allows creating organizations, managing admins, and handling authentication using JWT tokens.
 
 ## What This Does
 
@@ -21,7 +21,7 @@ Key features:
 
 ## Architecture
 
-![Architecture Diagram](./app/architecture.png)
+![Architecture Diagram](./app/FastAPI%20Multi-Tenant-2025-12-12-201847.png)
 
 ### How It Works
 
