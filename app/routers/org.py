@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Header
 from app.schemas.org_schemas import CreateOrg, UpdateOrg
 from app.db import organizations, admins, get_dynamic_collection, db
 from app.utils.security import hash_password, verify_password
@@ -6,19 +6,26 @@ from app.utils.jwt_handler import decode_token
 
 router = APIRouter(prefix="/org")
 
-# simple token dependency
-def get_current_admin(token: str):
+def get_current_admin(authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+    
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+    
+    token = parts[1]
     try:
         return decode_token(token)
     except:
-        raise HTTPException(401, "Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 @router.post("/create")
 async def create_org(data: CreateOrg):
     existing = await organizations.find_one({"name": data.organization_name})
     if existing:
-        raise HTTPException(400, "Organization already exists")
+        raise HTTPException(status_code=400, detail="Organization already exists")
 
     collection_name = f"org_{data.organization_name.lower()}"
 
@@ -46,21 +53,23 @@ async def create_org(data: CreateOrg):
 async def get_org(name: str):
     org = await organizations.find_one({"name": name})
     if not org:
-        raise HTTPException(404, "Organization not found")
+        raise HTTPException(status_code=404, detail="Organization not found")
     return org
 
 
 @router.put("/update")
-async def update_org(data: UpdateOrg, token: str = Depends(get_current_admin)):
-    # verify admin belongs to org
-    if data.organization_name != token.get("organization"):
-        raise HTTPException(403, "Not allowed")
-
-    old_name = token.get("organization")
+async def update_org(data: UpdateOrg, admin_data: dict = Depends(get_current_admin)):
+    old_name = admin_data.get("organization")
     old_org = await organizations.find_one({"name": old_name})
 
     if not old_org:
-        raise HTTPException(404, "Organization not found")
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # check if new name already exists
+    if data.organization_name != old_name:
+        existing = await organizations.find_one({"name": data.organization_name})
+        if existing:
+            raise HTTPException(status_code=400, detail="Organization name already exists")
 
     new_collection = f"org_{data.organization_name.lower()}"
     old_collection = old_org["collection"]
@@ -74,7 +83,7 @@ async def update_org(data: UpdateOrg, token: str = Depends(get_current_admin)):
     items = old_col_ref.find({})
     docs = []
     async for doc in items:
-        doc["_id"] = None
+        doc.pop("_id", None)
         docs.append(doc)
 
     if docs:
@@ -104,13 +113,13 @@ async def update_org(data: UpdateOrg, token: str = Depends(get_current_admin)):
 
 
 @router.delete("/delete")
-async def delete_org(name: str, token: str = Depends(get_current_admin)):
-    if name != token.get("organization"):
-        raise HTTPException(403, "Not allowed")
+async def delete_org(name: str, admin_data: dict = Depends(get_current_admin)):
+    if name != admin_data.get("organization"):
+        raise HTTPException(status_code=403, detail="Not allowed")
 
     org = await organizations.find_one({"name": name})
     if not org:
-        raise HTTPException(404, "Organization not found")
+        raise HTTPException(status_code=404, detail="Organization not found")
 
     await db.drop_collection(org["collection"])
     await organizations.delete_one({"name": name})

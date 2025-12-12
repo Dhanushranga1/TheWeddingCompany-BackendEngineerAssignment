@@ -11,10 +11,10 @@ router = APIRouter(prefix="/admin")
 async def admin_login(data: AdminLogin):
     admin = await admins.find_one({"email": data.email})
     if not admin:
-        raise HTTPException(401, "Invalid credentials")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not verify_password(data.password, admin["password"]):
-        raise HTTPException(401, "Invalid credentials")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_token({
         "admin_id": str(admin["_id"]),
